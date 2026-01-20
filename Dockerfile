@@ -6,14 +6,14 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Copy package files
-COPY ce-wallet-service/package*.json ./
+COPY package*.json ./
 
 # Install all dependencies (including dev)
 RUN npm install
 
 # Copy source code
-COPY ce-wallet-service/tsconfig.json ./
-COPY ce-wallet-service/src ./src
+COPY tsconfig.json ./
+COPY src ./src
 
 # Build TypeScript
 RUN npm run build
@@ -35,7 +35,7 @@ RUN npm install --only=production && npm cache clean --force
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
-COPY ce-wallet-service/src/keys ./keys
+COPY src/keys ./keys
 
 # Create logs directory
 RUN mkdir -p logs && chown -R nodejs:nodejs logs
