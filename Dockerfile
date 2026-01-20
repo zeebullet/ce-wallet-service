@@ -9,7 +9,7 @@ WORKDIR /app
 COPY ce-wallet-service/package*.json ./
 
 # Install all dependencies (including dev)
-RUN npm ci
+RUN npm install
 
 # Copy source code
 COPY ce-wallet-service/tsconfig.json ./
@@ -31,7 +31,7 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY --from=builder /app/package*.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm install --only=production && npm cache clean --force
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
