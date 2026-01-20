@@ -5,6 +5,7 @@ import * as transactionService from '../../services/transactionService';
 import * as newWalletService from '../../services/newWalletService';
 import * as brandWalletService from '../../services/brandWalletService';
 import * as brandRechargeService from '../../services/brandRechargeService';
+import * as brandEscrowService from '../../services/brandEscrowService';
 import { logger } from '../../utils/logger';
 import { Response } from 'express';
 import { AuthenticatedRequest, extractUser, requireAuth, requireAdmin } from '../../middleware/auth';
@@ -330,6 +331,267 @@ router.get('/brand/recharge/history', requireAuth, async (req: AuthenticatedRequ
     });
   } catch (error: any) {
     logger.error('Error getting recharge history', { error: error.message, userId: req.user?.id });
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// ============ BRAND ESCROW ROUTES ============
+
+/**
+ * GET /api/wallet/brand/escrow/balance
+ * Get escrow balance details
+ */
+router.get('/brand/escrow/balance', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    // Get brand linked to this user
+    const walletData = await brandWalletService.getOrCreateBrandWallet(userId);
+    const brandId = walletData.wallet.brand_id;
+
+    const result = await brandEscrowService.getEscrowBalance(brandId);
+
+    res.json({ 
+      success: true, 
+      data: result 
+    });
+  } catch (error: any) {
+    logger.error('Error getting escrow balance', { error: error.message, userId: req.user?.id });
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/wallet/brand/escrow/deposit/initiate
+ * Initiate escrow deposit - returns Razorpay order if payment needed
+ */
+router.post(
+  '/brand/escrow/deposit/initiate',
+  requireAuth,
+  body('amount').isFloat({ min: 1 }).withMessage('Amount must be greater than 0'),
+  body('campaign_id').optional().isUUID().withMessage('Invalid campaign ID'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { amount, campaign_id } = req.body;
+
+      // Get brand linked to this user
+      const walletData = await brandWalletService.getOrCreateBrandWallet(userId);
+      const brandId = walletData.wallet.brand_id;
+
+      const result = await brandEscrowService.initiateEscrowDeposit({
+        amount: parseFloat(amount),
+        brand_id: brandId,
+        user_id: userId,
+        campaign_id,
+      });
+
+      res.json({ 
+        success: true, 
+        data: result 
+      });
+    } catch (error: any) {
+      logger.error('Error initiating escrow deposit', { error: error.message, userId: req.user?.id });
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+);
+
+/**
+ * POST /api/wallet/brand/escrow/deposit/verify
+ * Verify escrow deposit payment
+ */
+router.post(
+  '/brand/escrow/deposit/verify',
+  requireAuth,
+  body('razorpay_order_id').notEmpty().withMessage('Razorpay order ID required'),
+  body('razorpay_payment_id').notEmpty().withMessage('Razorpay payment ID required'),
+  body('razorpay_signature').notEmpty().withMessage('Razorpay signature required'),
+  body('transaction_id').isUUID().withMessage('Valid transaction ID required'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature, transaction_id } = req.body;
+
+      const result = await brandEscrowService.verifyEscrowDeposit({
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature,
+        transaction_id,
+      });
+
+      res.json({ 
+        success: true, 
+        data: result 
+      });
+    } catch (error: any) {
+      logger.error('Error verifying escrow deposit', { 
+        error: error.message, 
+        userId: req.user?.id,
+        razorpay_order_id: req.body.razorpay_order_id,
+      });
+      
+      if (error.message.includes('verification failed')) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'PAYMENT_VERIFICATION_FAILED',
+          message: error.message 
+        });
+      }
+      
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+);
+
+/**
+ * POST /api/wallet/brand/escrow/hold
+ * Hold escrow for a campaign (internal use - called by campaign service)
+ */
+router.post(
+  '/brand/escrow/hold',
+  requireAuth,
+  body('amount').isFloat({ min: 1 }).withMessage('Amount must be greater than 0'),
+  body('campaign_id').isUUID().withMessage('Valid campaign ID required'),
+  body('campaign_title').notEmpty().withMessage('Campaign title required'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { amount, campaign_id, campaign_title } = req.body;
+
+      // Get brand linked to this user
+      const walletData = await brandWalletService.getOrCreateBrandWallet(userId);
+      const brandId = walletData.wallet.brand_id;
+
+      const result = await brandEscrowService.holdEscrow({
+        brand_id: brandId,
+        user_id: userId,
+        amount: parseFloat(amount),
+        campaign_id,
+        campaign_title,
+      });
+
+      res.json({ 
+        success: true, 
+        data: result 
+      });
+    } catch (error: any) {
+      logger.error('Error holding escrow', { error: error.message, userId: req.user?.id });
+      
+      if (error.message.includes('Insufficient')) {
+        return res.status(400).json({ 
+          success: false, 
+          error: 'INSUFFICIENT_ESCROW',
+          message: error.message 
+        });
+      }
+      
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+);
+
+/**
+ * POST /api/wallet/brand/escrow/release
+ * Release escrow to creator (internal use - called by campaign service)
+ */
+router.post(
+  '/brand/escrow/release',
+  requireAuth,
+  body('amount').isFloat({ min: 1 }).withMessage('Amount must be greater than 0'),
+  body('campaign_id').isUUID().withMessage('Valid campaign ID required'),
+  body('application_id').isUUID().withMessage('Valid application ID required'),
+  body('creator_id').isUUID().withMessage('Valid creator ID required'),
+  body('creator_name').optional().isString(),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { amount, campaign_id, application_id, creator_id, creator_name } = req.body;
+
+      // Get brand linked to this user
+      const walletData = await brandWalletService.getOrCreateBrandWallet(userId);
+      const brandId = walletData.wallet.brand_id;
+
+      const result = await brandEscrowService.releaseEscrow({
+        brand_id: brandId,
+        user_id: userId,
+        amount: parseFloat(amount),
+        campaign_id,
+        application_id,
+        creator_id,
+        creator_name,
+      });
+
+      res.json({ 
+        success: true, 
+        data: result 
+      });
+    } catch (error: any) {
+      logger.error('Error releasing escrow', { error: error.message, userId: req.user?.id });
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+);
+
+/**
+ * POST /api/wallet/brand/escrow/refund
+ * Refund held escrow back to available balance
+ */
+router.post(
+  '/brand/escrow/refund',
+  requireAuth,
+  body('amount').isFloat({ min: 1 }).withMessage('Amount must be greater than 0'),
+  body('campaign_id').isUUID().withMessage('Valid campaign ID required'),
+  body('reason').notEmpty().withMessage('Refund reason required'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { amount, campaign_id, reason } = req.body;
+
+      // Get brand linked to this user
+      const walletData = await brandWalletService.getOrCreateBrandWallet(userId);
+      const brandId = walletData.wallet.brand_id;
+
+      const result = await brandEscrowService.refundEscrow({
+        brand_id: brandId,
+        user_id: userId,
+        amount: parseFloat(amount),
+        campaign_id,
+        reason,
+      });
+
+      res.json({ 
+        success: true, 
+        data: result 
+      });
+    } catch (error: any) {
+      logger.error('Error refunding escrow', { error: error.message, userId: req.user?.id });
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+);
+
+/**
+ * GET /api/wallet/brand/escrow/transactions
+ * Get escrow transaction history
+ */
+router.get('/brand/escrow/transactions', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    // Get brand linked to this user
+    const walletData = await brandWalletService.getOrCreateBrandWallet(userId);
+    const brandId = walletData.wallet.brand_id;
+
+    const result = await brandEscrowService.getEscrowTransactions(brandId, page, limit);
+
+    res.json({ 
+      success: true, 
+      data: result 
+    });
+  } catch (error: any) {
+    logger.error('Error getting escrow transactions', { error: error.message, userId: req.user?.id });
     res.status(400).json({ success: false, message: error.message });
   }
 });

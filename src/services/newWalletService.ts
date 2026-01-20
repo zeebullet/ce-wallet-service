@@ -202,7 +202,8 @@ export async function getEarningsLeaderboard(
 ): Promise<any[]> {
   let query = db('wallets')
     .join('ce_users', 'wallets.user_id', 'ce_users.id')
-    .where('ce_users.is_creator', true);
+    .join('ce_creator_profiles', 'wallets.user_id', 'ce_creator_profiles.user_id')
+    .where('ce_creator_profiles.application_status', 'approved');
 
   if (period === 'monthly') {
     const startOfMonth = new Date();
@@ -215,12 +216,12 @@ export async function getEarningsLeaderboard(
       .where('transactions.transaction_type', 'campaign_earning')
       .where('transactions.status', 'completed')
       .where('transactions.created_at', '>=', startOfMonth)
-      .groupBy('transactions.user_id', 'ce_users.username', 'ce_users.display_name', 'ce_users.avatar_url')
+      .groupBy('transactions.user_id', 'ce_users.username', 'ce_users.full_name', 'ce_users.profile_picture_url')
       .select(
         'transactions.user_id',
         'ce_users.username',
-        'ce_users.display_name',
-        'ce_users.avatar_url',
+        'ce_users.full_name as display_name',
+        'ce_users.profile_picture_url as avatar_url',
         db.raw('SUM(transactions.amount) as total_earned')
       )
       .orderBy('total_earned', 'desc')
@@ -237,12 +238,12 @@ export async function getEarningsLeaderboard(
       .where('transactions.transaction_type', 'campaign_earning')
       .where('transactions.status', 'completed')
       .where('transactions.created_at', '>=', startOfWeek)
-      .groupBy('transactions.user_id', 'ce_users.username', 'ce_users.display_name', 'ce_users.avatar_url')
+      .groupBy('transactions.user_id', 'ce_users.username', 'ce_users.full_name', 'ce_users.profile_picture_url')
       .select(
         'transactions.user_id',
         'ce_users.username',
-        'ce_users.display_name',
-        'ce_users.avatar_url',
+        'ce_users.full_name as display_name',
+        'ce_users.profile_picture_url as avatar_url',
         db.raw('SUM(transactions.amount) as total_earned')
       )
       .orderBy('total_earned', 'desc')
@@ -254,8 +255,8 @@ export async function getEarningsLeaderboard(
     .select(
       'wallets.user_id',
       'ce_users.username',
-      'ce_users.display_name',
-      'ce_users.avatar_url',
+      'ce_users.full_name as display_name',
+      'ce_users.profile_picture_url as avatar_url',
       'wallets.total_earnings as total_earned'
     )
     .orderBy('wallets.total_earnings', 'desc')
