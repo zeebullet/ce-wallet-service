@@ -3,11 +3,25 @@ import crypto from 'crypto';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
-// Initialize Razorpay instance
-const razorpay = new Razorpay({
-  key_id: config.razorpay?.keyId || process.env.RAZORPAY_KEY_ID || '',
-  key_secret: config.razorpay?.keySecret || process.env.RAZORPAY_KEY_SECRET || '',
-});
+// Initialize Razorpay instance lazily
+let razorpay: Razorpay | null = null;
+
+const getRazorpayInstance = (): Razorpay => {
+  if (!razorpay) {
+    const keyId = config.razorpay?.keyId || process.env.RAZORPAY_KEY_ID;
+    const keySecret = config.razorpay?.keySecret || process.env.RAZORPAY_KEY_SECRET;
+    
+    if (!keyId || !keySecret) {
+      throw new Error('Razorpay credentials not configured. Please set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET');
+    }
+    
+    razorpay = new Razorpay({
+      key_id: keyId,
+      key_secret: keySecret,
+    });
+  }
+  return razorpay;
+};
 
 // ============ INTERFACES ============
 
@@ -72,7 +86,7 @@ export interface PaymentDetails {
  */
 export async function createOrder(input: CreateOrderInput): Promise<RazorpayOrder> {
   try {
-    const order = await razorpay.orders.create({
+    const order = await getRazorpayInstance().orders.create({
       amount: input.amount,
       currency: input.currency,
       receipt: input.receipt,
@@ -132,7 +146,7 @@ export function verifyPaymentSignature(input: VerifyPaymentInput): boolean {
  */
 export async function fetchPayment(paymentId: string): Promise<PaymentDetails> {
   try {
-    const payment = await razorpay.payments.fetch(paymentId);
+    const payment = await getRazorpayInstance().payments.fetch(paymentId);
     return payment as PaymentDetails;
   } catch (error: any) {
     logger.error('[Razorpay] Failed to fetch payment', {
@@ -148,7 +162,7 @@ export async function fetchPayment(paymentId: string): Promise<PaymentDetails> {
  */
 export async function fetchOrder(orderId: string): Promise<RazorpayOrder> {
   try {
-    const order = await razorpay.orders.fetch(orderId);
+    const order = await getRazorpayInstance().orders.fetch(orderId);
     return order as RazorpayOrder;
   } catch (error: any) {
     logger.error('[Razorpay] Failed to fetch order', {
@@ -164,7 +178,7 @@ export async function fetchOrder(orderId: string): Promise<RazorpayOrder> {
  */
 export async function capturePayment(paymentId: string, amount: number): Promise<PaymentDetails> {
   try {
-    const payment = await razorpay.payments.capture(paymentId, amount, 'INR');
+    const payment = await getRazorpayInstance().payments.capture(paymentId, amount, 'INR');
     
     logger.info('[Razorpay] Payment captured', {
       payment_id: paymentId,
@@ -199,7 +213,7 @@ export async function createRefund(
       refundOptions.amount = amount;
     }
 
-    const refund = await razorpay.payments.refund(paymentId, refundOptions);
+    const refund = await getRazorpayInstance().payments.refund(paymentId, refundOptions);
     
     logger.info('[Razorpay] Refund initiated', {
       payment_id: paymentId,
