@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ce-wallet-service
+  namespace: hippi
+  labels:
+    app: ce-wallet-service
+    tier: backend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ce-wallet-service
+  template:
+    metadata:
+      labels:
+        app: ce-wallet-service
+        tier: backend
+    spec:
+      containers:
+      - name: ce-wallet-service
+        image: asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3008
+          protocol: TCP
+        env:
+        - name: PORT
+          value: "3008"
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: hippi-config
+              key: NODE_ENV
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: hippi-config
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: hippi-config
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: hippi-config
+              key: DB_NAME
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: hippi-secrets
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: hippi-secrets
+              key: DB_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: hippi-secrets
+              key: JWT_SECRET
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: hippi-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: hippi-config
+              key: REDIS_PORT
+        - name: RAZORPAY_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: hippi-secrets
+              key: RAZORPAY_KEY_ID
+              optional: true
+        - name: RAZORPAY_KEY_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: hippi-secrets
+              key: RAZORPAY_KEY_SECRET
+              optional: true
+        - name: STRIPE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: hippi-secrets
+              key: STRIPE_SECRET_KEY
+              optional: true
+          valueFrom:
+            configMapKeyRef:
+              name: hippi-config
+              key: REDIS_PORT
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3008
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3008
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ce-wallet-service
+  namespace: hippi
+  labels:
+    app: ce-wallet-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 3008
+    targetPort: 3008
+    protocol: TCP
+    name: http
+  selector:
+    app: ce-wallet-service
