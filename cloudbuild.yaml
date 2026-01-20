@@ -1,0 +1,85 @@
+steps:
+  # Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:latest'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:$SHORT_SHA'
+      - '-t'
+      - 'asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:$COMMIT_SHA'
+      - '.'
+
+  # Push the images
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:latest'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:$SHORT_SHA'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:$COMMIT_SHA'
+
+  # Deploy to GKE
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'container'
+      - 'clusters'
+      - 'get-credentials'
+      - 'creatoreconomy-gke'
+      - '--region=asia-south1'
+      - '--project=creatoreconomy-479409'
+
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args:
+      - 'set'
+      - 'image'
+      - 'deployment/ce-wallet-service'
+      - 'ce-wallet-service=asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:$SHORT_SHA'
+      - '-n'
+      - 'hippi'
+    env:
+      - 'CLOUDSDK_COMPUTE_REGION=asia-south1'
+      - 'CLOUDSDK_CONTAINER_CLUSTER=creatoreconomy-gke'
+
+  # Verify deployment
+  - name: 'gcr.io/cloud-builders/kubectl'
+    args:
+      - 'rollout'
+      - 'status'
+      - 'deployment/ce-wallet-service'
+      - '-n'
+      - 'hippi'
+      - '--timeout=5m'
+    env:
+      - 'CLOUDSDK_COMPUTE_REGION=asia-south1'
+      - 'CLOUDSDK_CONTAINER_CLUSTER=creatoreconomy-gke'
+
+# Configure timeout
+timeout: '1200s'
+
+# Images to be pushed to the registry
+images:
+  - 'asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:latest'
+  - 'asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:$SHORT_SHA'
+  - 'asia-south1-docker.pkg.dev/creatoreconomy-479409/ce-wallet-service/ce-wallet-service:$COMMIT_SHA'
+
+# Build options
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: NONE
+  substitutionOption: 'ALLOW_LOOSE'
+
+# Substitutions (can be overridden)
+substitutions:
+  _SERVICE_NAME: 'ce-wallet-service'
+  _REGION: 'asia-south1'
+  _CLUSTER: 'creatoreconomy-gke'
+  _NAMESPACE: 'hippi'
