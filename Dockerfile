@@ -35,7 +35,6 @@ RUN npm install --only=production && npm cache clean --force
 
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
-COPY src/keys ./keys
 
 # Create logs directory
 RUN mkdir -p logs && chown -R nodejs:nodejs logs
