@@ -609,6 +609,10 @@ router.post(
   body('account_number').notEmpty().withMessage('Account number required'),
   body('ifsc_code').notEmpty().withMessage('IFSC code required'),
   body('bank_name').notEmpty().withMessage('Bank name required'),
+  body('pan_card_number')
+    .notEmpty().withMessage('PAN card number required')
+    .matches(/^[A-Z]{5}[0-9]{4}[A-Z]$/).withMessage('Invalid PAN card number format'),
+  body('pan_card_image_url').optional().isURL().withMessage('Invalid PAN card image URL'),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user!.id;

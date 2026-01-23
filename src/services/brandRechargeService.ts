@@ -2,6 +2,11 @@ import db from '../db';
 import { logger } from '../utils/logger';
 import * as razorpayService from './razorpayService';
 import * as brandWalletService from './brandWalletService';
+import {
+  notifyBrandDiamondPurchaseSuccess,
+  notifyBrandDiamondPurchaseFailed,
+  notifyAdminHighValueTransaction,
+} from './notificationService';
 
 // ============ INTERFACES ============
 
@@ -225,6 +230,13 @@ export async function verifyRecharge(input: VerifyRechargeInput): Promise<Verify
       razorpay_payment_id,
     });
 
+    // Send failure notification to brand
+    notifyBrandDiamondPurchaseFailed(
+      transaction.user_id,
+      parseFloat(transaction.amount),
+      'Payment verification failed. Please contact support if amount was deducted.'
+    ).catch(err => logger.error('[Recharge] Failed to send failure notification', { error: err.message }));
+
     throw new Error('Payment verification failed. Please contact support if amount was deducted.');
   }
 
@@ -301,6 +313,27 @@ export async function verifyRecharge(input: VerifyRechargeInput): Promise<Verify
       tokens_credited: tokensToCredit,
       new_balance: newBalance,
     });
+
+    // Send success notification to brand
+    notifyBrandDiamondPurchaseSuccess(
+      transaction.user_id,
+      parseFloat(transaction.amount),
+      tokensToCredit,
+      newBalance,
+      packageDisplayName
+    ).catch(err => logger.error('[Recharge] Failed to send success notification', { error: err.message }));
+
+    // Notify admin for high-value transactions (e.g., > ₹10,000)
+    if (parseFloat(transaction.amount) >= 10000) {
+      const brand = await db('brands').where('id', transaction.brand_id).first();
+      notifyAdminHighValueTransaction(
+        transaction.brand_id,
+        brand?.name || 'Brand',
+        parseFloat(transaction.amount),
+        'token_purchase',
+        transaction_id
+      ).catch(err => logger.error('[Recharge] Failed to send admin notification', { error: err.message }));
+    }
 
     return {
       success: true,
