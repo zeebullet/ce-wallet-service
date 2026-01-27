@@ -47,6 +47,7 @@ export interface BrandTransaction {
 export interface Package {
   id: string;
   user_type: string;
+  package_type: 'subscription' | 'topup';
   name: string;
   display_name: string;
   description: string | null;
