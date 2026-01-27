@@ -406,12 +406,20 @@ export async function getBrandTransactions(
 
 /**
  * Get available brand packages
+ * @param packageType - Optional filter: 'subscription' | 'topup'
  */
-export async function getAvailableBrandPackages(): Promise<Package[]> {
-  const packages = await db('packages')
+export async function getAvailableBrandPackages(
+  packageType?: 'subscription' | 'topup'
+): Promise<Package[]> {
+  let query = db('packages')
     .where('user_type', 'brand')
-    .where('is_active', true)
-    .orderBy('sort_order', 'asc');
+    .where('is_active', true);
+  
+  if (packageType) {
+    query = query.where('package_type', packageType);
+  }
+  
+  const packages = await query.orderBy('sort_order', 'asc');
   
   return packages;
 }

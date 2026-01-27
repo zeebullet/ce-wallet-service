@@ -138,10 +138,12 @@ router.get('/brand/transactions', requireAuth, async (req: AuthenticatedRequest,
 /**
  * GET /api/wallet/brand/packages
  * Get available brand packages
+ * @query package_type - Filter by package type: 'subscription' | 'topup'
  */
 router.get('/brand/packages', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const packages = await brandWalletService.getAvailableBrandPackages();
+    const packageType = req.query.package_type as 'subscription' | 'topup' | undefined;
+    const packages = await brandWalletService.getAvailableBrandPackages(packageType);
     res.json({ 
       success: true, 
       data: { packages } 
