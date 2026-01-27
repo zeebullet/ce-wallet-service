@@ -135,7 +135,7 @@ export async function initiateRecharge(input: InitiateRechargeInput): Promise<In
     .insert({
       brand_id,
       user_id,
-      transaction_type: 'token_purchase',
+      transaction_type: 'token_credit',
       amount: pkg.price,
       currency: pkg.currency || 'INR',
       currency_type: 'token',
@@ -516,7 +516,8 @@ export async function getRechargeHistory(
 
   const [{ count }] = await db('brand_transactions')
     .where('brand_id', brandId)
-    .where('transaction_type', 'token_purchase')
+    .where('transaction_type', 'token_credit')
+    .where('reference_type', 'package_purchase')
     .count();
 
   const total = parseInt(count as string, 10);
@@ -524,7 +525,8 @@ export async function getRechargeHistory(
 
   const transactions = await db('brand_transactions')
     .where('brand_id', brandId)
-    .where('transaction_type', 'token_purchase')
+    .where('transaction_type', 'token_credit')
+    .where('reference_type', 'package_purchase')
     .orderBy('created_at', 'desc')
     .offset(offset)
     .limit(limit);
