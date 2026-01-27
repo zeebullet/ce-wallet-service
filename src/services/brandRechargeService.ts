@@ -140,7 +140,7 @@ export async function initiateRecharge(input: InitiateRechargeInput): Promise<In
       currency: pkg.currency || 'INR',
       currency_type: 'token',
       balance_after: (wallet.wallet.token_balance || 0), // Will be updated on verification
-      reference_type: 'package_purchase',
+      reference_type: 'package',
       reference_id: pkg.id,
       payment_method: 'razorpay',
       payment_gateway_id: razorpayOrder.id, // Razorpay order_id
@@ -517,7 +517,7 @@ export async function getRechargeHistory(
   const [{ count }] = await db('brand_transactions')
     .where('brand_id', brandId)
     .where('transaction_type', 'token_credit')
-    .where('reference_type', 'package_purchase')
+    .where('reference_type', 'package')
     .count();
 
   const total = parseInt(count as string, 10);
@@ -526,7 +526,7 @@ export async function getRechargeHistory(
   const transactions = await db('brand_transactions')
     .where('brand_id', brandId)
     .where('transaction_type', 'token_credit')
-    .where('reference_type', 'package_purchase')
+    .where('reference_type', 'package')
     .orderBy('created_at', 'desc')
     .offset(offset)
     .limit(limit);
