@@ -508,6 +508,8 @@ export async function getRechargeHistory(
     limit: number;
     total: number;
     totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
   };
 }> {
   const offset = (page - 1) * limit;
@@ -518,6 +520,7 @@ export async function getRechargeHistory(
     .count();
 
   const total = parseInt(count as string, 10);
+  const totalPages = Math.ceil(total / limit);
 
   const transactions = await db('brand_transactions')
     .where('brand_id', brandId)
@@ -532,7 +535,9 @@ export async function getRechargeHistory(
       page,
       limit,
       total,
-      totalPages: Math.ceil(total / limit),
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1
     },
   };
 }

@@ -128,7 +128,9 @@ export async function initiateEscrowDeposit(
   }
 
   // Calculate amount to pay (shortfall)
-  const amountToPay = amount - currentBalance;
+//   const amountToPay = amount - currentBalance;
+  // accept the amount that user is sending.
+  const amountToPay = amount;
 
   // Generate unique receipt
   const timestamp = Date.now();
@@ -655,6 +657,8 @@ export async function getEscrowTransactions(
     limit: number;
     total: number;
     totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
   };
 }> {
   const offset = (page - 1) * limit;
@@ -665,6 +669,7 @@ export async function getEscrowTransactions(
     .count();
 
   const total = parseInt(count as string, 10);
+  const totalPages = Math.ceil(total / limit);
 
   const transactions = await db('brand_transactions')
     .where('brand_id', brandId)
@@ -679,7 +684,9 @@ export async function getEscrowTransactions(
       page,
       limit,
       total,
-      totalPages: Math.ceil(total / limit),
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1
     },
   };
 }
