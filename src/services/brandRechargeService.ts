@@ -131,6 +131,9 @@ export async function initiateRecharge(input: InitiateRechargeInput): Promise<In
   });
 
   // Step 6: Create pending transaction in database
+  // Ensure tokens_included is stored as a number in metadata
+  const tokensIncluded = parseInt(pkg.tokens_included as any, 10) || 0;
+  
   const [transaction] = await db('brand_transactions')
     .insert({
       brand_id,
@@ -145,12 +148,12 @@ export async function initiateRecharge(input: InitiateRechargeInput): Promise<In
       payment_method: 'razorpay',
       payment_gateway_id: razorpayOrder.id, // Razorpay order_id
       status: 'pending',
-      description: `Package purchase: ${pkg.display_name} (${pkg.tokens_included} tokens)`,
+      description: `Package purchase: ${pkg.display_name} (${tokensIncluded} tokens)`,
       metadata: JSON.stringify({
         package_id: pkg.id,
         package_name: pkg.name,
         package_display_name: pkg.display_name,
-        tokens_included: pkg.tokens_included,
+        tokens_included: tokensIncluded,  // Ensure it's a number
         razorpay_order_id: razorpayOrder.id,
         receipt: receipt,
       }),
@@ -175,7 +178,7 @@ export async function initiateRecharge(input: InitiateRechargeInput): Promise<In
       id: pkg.id,
       name: pkg.name,
       display_name: pkg.display_name,
-      tokens_included: pkg.tokens_included,
+      tokens_included: tokensIncluded,  // Use the parsed number
       price: pkg.price,
     },
     prefill: brandDetails ? {
@@ -250,7 +253,8 @@ export async function verifyRecharge(input: VerifyRechargeInput): Promise<Verify
     metadata = {};
   }
 
-  const tokensToCredit = metadata.tokens_included || 0;
+  // Ensure tokensToCredit is a number (fix string concatenation bug)
+  const tokensToCredit = parseInt(metadata.tokens_included, 10) || 0;
   const packageName = metadata.package_name || 'unknown';
   const packageDisplayName = metadata.package_display_name || packageName;
 
@@ -427,7 +431,8 @@ export async function handleWebhook(
         metadata = {};
       }
 
-      const tokensToCredit = metadata.tokens_included || 0;
+      // Ensure tokensToCredit is a number (fix string concatenation bug)
+      const tokensToCredit = parseInt(metadata.tokens_included, 10) || 0;
       const packageName = metadata.package_name || 'unknown';
 
       const trx = await db.transaction();
