@@ -2,6 +2,11 @@ import db from '../db';
 import { logger } from '../utils/logger';
 import * as razorpayService from './razorpayService';
 import * as brandWalletService from './brandWalletService';
+import {
+  notifyBrandTokenEscrowSuccess,
+  notifyBrandWalletRefund,
+  notifyBrandLowWalletBalance,
+} from './notificationService';
 
 // ============ INTERFACES ============
 
@@ -123,7 +128,9 @@ export async function initiateEscrowDeposit(
   }
 
   // Calculate amount to pay (shortfall)
-  const amountToPay = amount - currentBalance;
+//   const amountToPay = amount - currentBalance;
+  // accept the amount that user is sending.
+  const amountToPay = amount;
 
   // Generate unique receipt
   const timestamp = Date.now();
@@ -373,6 +380,22 @@ export async function holdEscrow(input: HoldEscrowInput): Promise<{
       new_on_hold: updatedWallet.escrow_on_hold,
     });
 
+    // Send notification to brand about escrow hold
+    notifyBrandTokenEscrowSuccess(
+      user_id,
+      amount,
+      campaign_title,
+      campaign_id,
+      parseFloat(updatedWallet.escrow_balance) || 0
+    ).catch(err => logger.error('[Escrow] Failed to send escrow notification', { error: err.message }));
+
+    // Check if balance is low after hold
+    const remainingBalance = parseFloat(updatedWallet.escrow_balance) || 0;
+    if (remainingBalance < 1000 && remainingBalance > 0) {
+      notifyBrandLowWalletBalance(user_id, remainingBalance, 1000)
+        .catch(err => logger.error('[Escrow] Failed to send low balance notification', { error: err.message }));
+    }
+
     return {
       success: true,
       escrow_balance: parseFloat(updatedWallet.escrow_balance) || 0,
@@ -599,6 +622,15 @@ export async function refundEscrow(input: RefundEscrowInput): Promise<{
       new_on_hold: updatedWallet.escrow_on_hold,
     });
 
+    // Send notification to brand about refund
+    notifyBrandWalletRefund(
+      user_id,
+      amount,
+      reason,
+      undefined, // campaign title not available in this context
+      campaign_id
+    ).catch(err => logger.error('[Escrow] Failed to send refund notification', { error: err.message }));
+
     return {
       success: true,
       escrow_balance: parseFloat(updatedWallet.escrow_balance) || 0,
@@ -625,6 +657,8 @@ export async function getEscrowTransactions(
     limit: number;
     total: number;
     totalPages: number;
+    hasNext: boolean;
+    hasPrev: boolean;
   };
 }> {
   const offset = (page - 1) * limit;
@@ -635,6 +669,7 @@ export async function getEscrowTransactions(
     .count();
 
   const total = parseInt(count as string, 10);
+  const totalPages = Math.ceil(total / limit);
 
   const transactions = await db('brand_transactions')
     .where('brand_id', brandId)
@@ -649,7 +684,9 @@ export async function getEscrowTransactions(
       page,
       limit,
       total,
-      totalPages: Math.ceil(total / limit),
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1
     },
   };
 }
