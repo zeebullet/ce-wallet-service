@@ -7,6 +7,7 @@ import {
   notifyBrandDiamondPurchaseFailed,
   notifyAdminHighValueTransaction,
 } from './notificationService';
+import { generateBrandPurchaseInvoice } from './invoiceService';
 
 // ============ INTERFACES ============
 
@@ -345,6 +346,39 @@ export async function verifyRecharge(input: VerifyRechargeInput): Promise<Verify
       tokens_credited: tokensToCredit,
       new_balance: newBalance,
     });
+
+    // Generate invoice for the successful purchase
+    // try {
+    //   const brand = await db('brands').where('id', transaction.brand_id).first();
+      
+    //   const invoiceResult = await generateBrandPurchaseInvoice({
+    //     transaction_id,
+    //     brand_id: transaction.brand_id,
+    //     amount: parseFloat(transaction.amount),
+    //     brand: {
+    //       name: brand?.name || brand?.company_name || 'Brand',
+    //       address: brand?.address,
+    //       pan: brand?.pan_number,
+    //       gst_number: brand?.gst_number,
+    //       state: brand?.state,
+    //       state_code: brand?.state_code,
+    //     },
+    //     package_name: packageDisplayName,
+    //     tokens: tokensToCredit,
+    //     package_type: packageType,
+    //   });
+      
+    //   logger.info('[Recharge] Invoice generated successfully', {
+    //     transaction_id,
+    //     invoice_number: invoiceResult.invoice_number,
+    //   });
+    // } catch (invoiceError: any) {
+    //   // Don't fail the transaction if invoice generation fails
+    //   logger.error('[Recharge] Failed to generate invoice', {
+    //     transaction_id,
+    //     error: invoiceError.message,
+    //   });
+    // }
 
     // Send success notification to brand
     notifyBrandDiamondPurchaseSuccess(

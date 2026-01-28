@@ -40,5 +40,11 @@ export const config = {
     minAmount: parseInt(process.env.MIN_WITHDRAWAL_AMOUNT || '1000', 10),
     feePercent: parseFloat(process.env.WITHDRAWAL_FEE_PERCENT || '5'),
   },
+
+  gcp: {
+    useDefaultCredentials: process.env.GCP_USE_DEFAULT_CREDENTIALS === 'true',
+    bucket: process.env.GCS_BUCKET || 'ce-videos-creatoreconomy-479409',
+    keyFile: path.join(process.cwd(), 'keys/gcs-service-account.json'),
+  },
 };
 

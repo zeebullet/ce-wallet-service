@@ -7,6 +7,7 @@ import {
   notifyBrandWalletRefund,
   notifyBrandLowWalletBalance,
 } from './notificationService';
+import { generateEscrowDepositInvoice } from './invoiceService';
 
 // ============ INTERFACES ============
 
@@ -282,6 +283,44 @@ export async function verifyEscrowDeposit(
       amount_credited: amountToCredit,
       new_balance: newBalance,
     });
+
+    // Generate invoice for the successful escrow deposit
+    // try {
+    //   const brand = await db('brands').where('id', transaction.brand_id).first();
+      
+    //   // Get campaign name if available
+    //   let campaignName: string | undefined;
+    //   if (transaction.campaign_id) {
+    //     const campaign = await db('campaigns').where('id', transaction.campaign_id).first();
+    //     campaignName = campaign?.name;
+    //   }
+      
+    //   const invoiceResult = await generateEscrowDepositInvoice({
+    //     transaction_id,
+    //     brand_id: transaction.brand_id,
+    //     amount: amountToCredit,
+    //     brand: {
+    //       name: brand?.name || brand?.company_name || 'Brand',
+    //       address: brand?.address,
+    //       pan: brand?.pan_number,
+    //       gst_number: brand?.gst_number,
+    //       state: brand?.state,
+    //       state_code: brand?.state_code,
+    //     },
+    //     campaign_name: campaignName,
+    //   });
+      
+    //   logger.info('[Escrow] Invoice generated successfully', {
+    //     transaction_id,
+    //     invoice_number: invoiceResult.invoice_number,
+    //   });
+    // } catch (invoiceError: any) {
+    //   // Don't fail the transaction if invoice generation fails
+    //   logger.error('[Escrow] Failed to generate invoice', {
+    //     transaction_id,
+    //     error: invoiceError.message,
+    //   });
+    // }
 
     return {
       success: true,
