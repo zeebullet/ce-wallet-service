@@ -6,6 +6,7 @@ import * as newWalletService from '../../services/newWalletService';
 import * as brandWalletService from '../../services/brandWalletService';
 import * as brandRechargeService from '../../services/brandRechargeService';
 import * as brandEscrowService from '../../services/brandEscrowService';
+import * as creatorUnlockService from '../../services/creatorUnlockService';
 import { logger } from '../../utils/logger';
 import { Response } from 'express';
 import { AuthenticatedRequest, extractUser, requireAuth, requireAdmin } from '../../middleware/auth';
@@ -336,6 +337,202 @@ router.get('/brand/recharge/history', requireAuth, async (req: AuthenticatedRequ
     res.status(400).json({ success: false, message: error.message });
   }
 });
+
+// ============ BRAND CREATOR UNLOCK ROUTES ============
+
+/**
+ * POST /api/wallet/brand/creators/unlock
+ * Unlock a creator profile (deducts tokens based on package's report_token_cost)
+ */
+router.post(
+  '/brand/creators/unlock',
+  requireAuth,
+  body('creator_id').isUUID().withMessage('Valid creator ID required'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { creator_id } = req.body;
+
+      const result = await creatorUnlockService.unlockCreator({
+        brand_user_id: userId,
+        creator_id,
+      });
+
+      res.json({
+        success: true,
+        message: 'Creator profile unlocked successfully',
+        data: result,
+      });
+    } catch (error: any) {
+      logger.error('Error unlocking creator', { error: error.message, userId: req.user?.id });
+      
+      // Handle specific errors
+      if (error.message.includes('already unlocked')) {
+        res.status(400).json({
+          success: false,
+          error: 'ALREADY_UNLOCKED',
+          message: error.message,
+        });
+        return;
+      }
+      if (error.message.includes('Insufficient token')) {
+        res.status(400).json({
+          success: false,
+          error: 'INSUFFICIENT_TOKENS',
+          message: error.message,
+        });
+        return;
+      }
+      if (error.message.includes('Creator not found')) {
+        res.status(404).json({
+          success: false,
+          error: 'CREATOR_NOT_FOUND',
+          message: error.message,
+        });
+        return;
+      }
+      
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+);
+
+/**
+ * GET /api/wallet/brand/creators/unlocked
+ * Get list of creators unlocked by the brand
+ */
+router.get('/brand/creators/unlocked', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+
+    const result = await creatorUnlockService.getUnlockedCreators(userId, { page, limit });
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    logger.error('Error getting unlocked creators', { error: error.message, userId: req.user?.id });
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/wallet/brand/creators/check-unlocked
+ * Check if specific creators are unlocked (bulk check)
+ */
+router.post(
+  '/brand/creators/check-unlocked',
+  requireAuth,
+  body('creator_ids').isArray().withMessage('creator_ids must be an array'),
+  body('creator_ids.*').isUUID().withMessage('Each creator_id must be a valid UUID'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { creator_ids } = req.body;
+
+      const result = await creatorUnlockService.checkUnlockedCreators(userId, creator_ids);
+
+      res.json({
+        success: true,
+        data: { unlocked_status: result },
+      });
+    } catch (error: any) {
+      logger.error('Error checking unlocked creators', { error: error.message, userId: req.user?.id });
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+);
+
+/**
+ * GET /api/wallet/brand/creators/unlock-cost
+ * Get the token cost to unlock a creator (preview)
+ */
+router.get('/brand/creators/unlock-cost', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    const result = await creatorUnlockService.getUnlockCost(userId);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error: any) {
+    logger.error('Error getting unlock cost', { error: error.message, userId: req.user?.id });
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * POST /api/wallet/brand/creators/bulk-unlock
+ * Bulk unlock multiple creator profiles
+ */
+router.post(
+  '/brand/creators/bulk-unlock',
+  requireAuth,
+  body('creator_ids').isArray({ min: 1, max: 100 }).withMessage('creator_ids must be an array with 1-100 items'),
+  body('creator_ids.*').isUUID().withMessage('Each creator_id must be a valid UUID'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { creator_ids } = req.body;
+
+      const result = await creatorUnlockService.bulkUnlockCreators({
+        brand_user_id: userId,
+        creator_ids,
+      });
+
+      res.json({
+        success: true,
+        message: `Successfully unlocked ${result.total_unlocked} creator(s)`,
+        data: result,
+      });
+    } catch (error: any) {
+      logger.error('Error bulk unlocking creators', { error: error.message, userId: req.user?.id });
+      
+      if (error.message.includes('Insufficient token')) {
+        res.status(400).json({
+          success: false,
+          error: 'INSUFFICIENT_TOKENS',
+          message: error.message,
+        });
+        return;
+      }
+      
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+);
+
+/**
+ * POST /api/wallet/brand/creators/bulk-unlock-cost
+ * Get the token cost preview for bulk unlock
+ */
+router.post(
+  '/brand/creators/bulk-unlock-cost',
+  requireAuth,
+  body('creator_ids').isArray({ min: 1 }).withMessage('creator_ids must be a non-empty array'),
+  body('creator_ids.*').isUUID().withMessage('Each creator_id must be a valid UUID'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user!.id;
+      const { creator_ids } = req.body;
+
+      const result = await creatorUnlockService.getBulkUnlockCost(userId, creator_ids);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      logger.error('Error getting bulk unlock cost', { error: error.message, userId: req.user?.id });
+      res.status(400).json({ success: false, message: error.message });
+    }
+  }
+);
 
 // ============ BRAND ESCROW ROUTES ============
 
