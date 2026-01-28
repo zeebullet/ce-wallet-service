@@ -980,6 +980,12 @@ Get escrow-specific transaction history.
 | POST | `/brand/escrow/release` | Release escrow to creator | Yes |
 | POST | `/brand/escrow/refund` | Refund held escrow | Yes |
 | GET | `/brand/escrow/transactions` | Get escrow transactions | Yes |
+| POST | `/brand/creators/unlock` | Unlock a creator profile | Yes |
+| POST | `/brand/creators/bulk-unlock` | Bulk unlock creators | Yes |
+| GET | `/brand/creators/unlocked` | Get unlocked creators list | Yes |
+| POST | `/brand/creators/check-unlocked` | Check unlock status | Yes |
+| GET | `/brand/creators/unlock-cost` | Get unlock cost preview | Yes |
+| POST | `/brand/creators/bulk-unlock-cost` | Get bulk unlock cost | Yes |
 | POST | `/bank-accounts` | Add bank account | Yes |
 | GET | `/bank-accounts` | Get user's bank accounts | Yes |
 | PUT | `/bank-accounts/:id/primary` | Set primary bank account | Yes |
@@ -992,6 +998,340 @@ Get escrow-specific transaction history.
 | POST | `/admin/bank-accounts/:id/verify` | Verify bank account | Admin |
 | GET | `/admin/withdrawals/pending` | Get pending withdrawals | Admin |
 | POST | `/admin/withdrawals/:id/process` | Process withdrawal | Admin |
+
+---
+
+## Brand Creator Unlock APIs
+
+These APIs allow brands to unlock creator profiles to view detailed analytics and contact information. Tokens are deducted based on the `report_token_cost` from the brand's active package.
+
+### Unlock Single Creator
+
+**POST** `/api/v1/wallet/brand/creators/unlock`
+
+Unlock a single creator profile. Deducts tokens from brand wallet and creates transaction record.
+
+**Headers:**
+| Header | Type | Required |
+|--------|------|----------|
+| Authorization | Bearer token | Yes |
+
+**Request Body:**
+```json
+{
+  "creator_id": "creator-uuid-here"
+}
+```
+
+**Request Fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| creator_id | string (UUID) | Yes | The creator's user ID to unlock |
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Creator profile unlocked successfully",
+  "data": {
+    "success": true,
+    "unlock_id": "unlock-uuid",
+    "creator_id": "creator-uuid",
+    "tokens_spent": 5,
+    "remaining_token_balance": 45245,
+    "unlocked_at": "2026-01-28T10:30:00Z"
+  }
+}
+```
+
+**Response Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| unlock_id | string | Unique ID for this unlock record |
+| creator_id | string | The unlocked creator's ID |
+| tokens_spent | number | Tokens deducted for this unlock |
+| remaining_token_balance | number | Brand's remaining token balance |
+| unlocked_at | string | Timestamp when unlocked |
+
+**Error Responses:**
+| Status | Error Code | Description |
+|--------|------------|-------------|
+| 400 | ALREADY_UNLOCKED | Creator is already unlocked |
+| 400 | INSUFFICIENT_TOKENS | Not enough tokens to unlock |
+| 404 | CREATOR_NOT_FOUND | Creator does not exist |
+
+**Auth Required:** Yes (Brand user)
+
+---
+
+### Bulk Unlock Creators
+
+**POST** `/api/v1/wallet/brand/creators/bulk-unlock`
+
+Unlock multiple creator profiles at once. Each unlock deducts tokens and creates individual transaction records.
+
+**Headers:**
+| Header | Type | Required |
+|--------|------|----------|
+| Authorization | Bearer token | Yes |
+
+**Request Body:**
+```json
+{
+  "creator_ids": [
+    "creator-uuid-1",
+    "creator-uuid-2",
+    "creator-uuid-3"
+  ]
+}
+```
+
+**Request Fields:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| creator_ids | array of UUIDs | Yes | List of creator IDs to unlock |
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Bulk unlock completed",
+  "data": {
+    "success": true,
+    "total_requested": 5,
+    "total_unlocked": 3,
+    "total_tokens_spent": 15,
+    "remaining_token_balance": 45230,
+    "unlocked": [
+      {
+        "creator_id": "creator-uuid-1",
+        "unlock_id": "unlock-uuid-1",
+        "tokens_spent": 5
+      },
+      {
+        "creator_id": "creator-uuid-2",
+        "unlock_id": "unlock-uuid-2",
+        "tokens_spent": 5
+      }
+    ],
+    "skipped": [
+      {
+        "creator_id": "creator-uuid-3",
+        "reason": "Already unlocked"
+      }
+    ],
+    "failed": [
+      {
+        "creator_id": "creator-uuid-4",
+        "reason": "Creator not found"
+      },
+      {
+        "creator_id": "creator-uuid-5",
+        "reason": "Insufficient token balance"
+      }
+    ]
+  }
+}
+```
+
+**Response Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| total_requested | number | Total creators requested to unlock |
+| total_unlocked | number | Successfully unlocked count |
+| total_tokens_spent | number | Total tokens deducted |
+| remaining_token_balance | number | Brand's remaining token balance |
+| unlocked | array | List of successfully unlocked creators |
+| skipped | array | Creators already unlocked (no tokens charged) |
+| failed | array | Creators that failed to unlock |
+
+**Auth Required:** Yes (Brand user)
+
+---
+
+### Get Unlocked Creators
+
+**GET** `/api/v1/wallet/brand/creators/unlocked`
+
+Get list of all creators unlocked by the brand.
+
+**Headers:**
+| Header | Type | Required |
+|--------|------|----------|
+| Authorization | Bearer token | Yes |
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| page | number | 1 | Page number |
+| limit | number | 20 | Items per page (max 100) |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "unlocked_creators": [
+      {
+        "id": "unlock-uuid",
+        "brand_id": "brand-uuid",
+        "creator_id": "creator-uuid",
+        "unlocked_by_user_id": "user-uuid",
+        "transaction_id": "txn-uuid",
+        "tokens_spent": 5,
+        "package_id": "package-uuid",
+        "package_name": "free",
+        "unlocked_at": "2026-01-28T10:30:00Z",
+        "creator": {
+          "id": "creator-uuid",
+          "username": "creator_handle",
+          "display_name": "Creator Name",
+          "profile_picture_url": "https://..."
+        }
+      }
+    ],
+    "total": 25,
+    "page": 1,
+    "limit": 20
+  }
+}
+```
+
+**Auth Required:** Yes (Brand user)
+
+---
+
+### Check Unlocked Status (Bulk)
+
+**POST** `/api/v1/wallet/brand/creators/check-unlocked`
+
+Check if specific creators are already unlocked by the brand.
+
+**Headers:**
+| Header | Type | Required |
+|--------|------|----------|
+| Authorization | Bearer token | Yes |
+
+**Request Body:**
+```json
+{
+  "creator_ids": [
+    "creator-uuid-1",
+    "creator-uuid-2",
+    "creator-uuid-3"
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "unlocked_status": {
+      "creator-uuid-1": true,
+      "creator-uuid-2": false,
+      "creator-uuid-3": true
+    }
+  }
+}
+```
+
+**Response Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| unlocked_status | object | Map of creator_id to boolean (true = unlocked) |
+
+**Auth Required:** Yes (Brand user)
+
+---
+
+### Get Unlock Cost Preview
+
+**GET** `/api/v1/wallet/brand/creators/unlock-cost`
+
+Get the token cost to unlock a creator (preview before unlocking).
+
+**Headers:**
+| Header | Type | Required |
+|--------|------|----------|
+| Authorization | Bearer token | Yes |
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "token_cost": 5,
+    "current_balance": 45250,
+    "can_unlock": true
+  }
+}
+```
+
+**Response Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| token_cost | number | Tokens required per unlock (from package) |
+| current_balance | number | Brand's current token balance |
+| can_unlock | boolean | Whether brand can afford to unlock |
+
+**Auth Required:** Yes (Brand user)
+
+---
+
+### Get Bulk Unlock Cost Preview
+
+**POST** `/api/v1/wallet/brand/creators/bulk-unlock-cost`
+
+Get cost preview for bulk unlocking multiple creators.
+
+**Headers:**
+| Header | Type | Required |
+|--------|------|----------|
+| Authorization | Bearer token | Yes |
+
+**Request Body:**
+```json
+{
+  "creator_ids": [
+    "creator-uuid-1",
+    "creator-uuid-2",
+    "creator-uuid-3"
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "token_cost_per_creator": 5,
+    "total_creators": 3,
+    "already_unlocked": 1,
+    "to_unlock": 2,
+    "total_token_cost": 10,
+    "current_balance": 45250,
+    "can_unlock_all": true,
+    "can_unlock_count": 2
+  }
+}
+```
+
+**Response Fields:**
+| Field | Type | Description |
+|-------|------|-------------|
+| token_cost_per_creator | number | Tokens required per unlock |
+| total_creators | number | Total creators in request |
+| already_unlocked | number | Creators already unlocked (won't be charged) |
+| to_unlock | number | Creators that need unlocking |
+| total_token_cost | number | Total tokens needed |
+| current_balance | number | Brand's current token balance |
+| can_unlock_all | boolean | Whether brand can afford all unlocks |
+| can_unlock_count | number | How many can be unlocked with current balance |
+
+**Auth Required:** Yes (Brand user)
 
 ---
 
