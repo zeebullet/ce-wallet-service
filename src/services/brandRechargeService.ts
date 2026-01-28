@@ -153,7 +153,9 @@ export async function initiateRecharge(input: InitiateRechargeInput): Promise<In
         package_id: pkg.id,
         package_name: pkg.name,
         package_display_name: pkg.display_name,
+        package_type: pkg.package_type || 'subscription',  // Store package type for verification
         tokens_included: tokensIncluded,  // Ensure it's a number
+        validity_days: pkg.validity_days,  // Store validity for subscription packages
         razorpay_order_id: razorpayOrder.id,
         receipt: receipt,
       }),
@@ -255,8 +257,11 @@ export async function verifyRecharge(input: VerifyRechargeInput): Promise<Verify
 
   // Ensure tokensToCredit is a number (fix string concatenation bug)
   const tokensToCredit = parseInt(metadata.tokens_included, 10) || 0;
+  const packageId = metadata.package_id;
   const packageName = metadata.package_name || 'unknown';
   const packageDisplayName = metadata.package_display_name || packageName;
+  const packageType = metadata.package_type || 'subscription';  // Default to subscription for backward compatibility
+  const validityDays = metadata.validity_days;
 
   if (tokensToCredit <= 0) {
     throw new Error('Invalid token amount in transaction');
@@ -278,20 +283,43 @@ export async function verifyRecharge(input: VerifyRechargeInput): Promise<Verify
     const currentBalance = parseFloat(wallet.token_balance) || 0;
     const newBalance = currentBalance + tokensToCredit;
 
+    // Build wallet update based on package type
+    // Subscription packages: Update current_package, package_activated_at, package_expires_at
+    // Topup packages: Only credit tokens, don't change package mapping
+    const walletUpdate: any = {
+      token_balance: newBalance,
+      total_tokens_credited: trx.raw('total_tokens_credited + ?', [tokensToCredit]),
+      last_transaction_at: new Date(),
+      updated_at: new Date(),
+    };
+
+    // Only update package mapping for subscription packages
+    if (packageType === 'subscription') {
+      walletUpdate.current_package = packageName;
+      walletUpdate.current_package_id = packageId;
+      walletUpdate.package_activated_at = new Date();
+      walletUpdate.package_expires_at = validityDays 
+        ? new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000)
+        : null;
+      
+      logger.info('[Recharge] Subscription package - updating wallet package mapping', {
+        transaction_id,
+        brand_id: transaction.brand_id,
+        package_name: packageName,
+        validity_days: validityDays,
+      });
+    } else {
+      logger.info('[Recharge] Topup package - only crediting tokens, no package mapping', {
+        transaction_id,
+        brand_id: transaction.brand_id,
+        tokens_credited: tokensToCredit,
+      });
+    }
+
     // Update wallet balance
     await trx('brand_wallets')
       .where('brand_id', transaction.brand_id)
-      .update({
-        token_balance: newBalance,
-        total_tokens_credited: trx.raw('total_tokens_credited + ?', [tokensToCredit]),
-        current_package: packageName, // Update to new package
-        package_activated_at: new Date(),
-        package_expires_at: metadata.validity_days 
-          ? new Date(Date.now() + metadata.validity_days * 24 * 60 * 60 * 1000)
-          : null,
-        last_transaction_at: new Date(),
-        updated_at: new Date(),
-      });
+      .update(walletUpdate);
 
     // Update transaction as completed
     await trx('brand_transactions')

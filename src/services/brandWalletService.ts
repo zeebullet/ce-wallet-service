@@ -16,6 +16,7 @@ export interface BrandWallet {
   total_escrow_released: number;
   total_escrow_refunded: number;
   current_package: string;
+  current_package_id: string | null;
   package_activated_at: Date | null;
   package_expires_at: Date | null;
   last_transaction_at: Date | null;
